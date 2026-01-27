@@ -1,263 +1,354 @@
 from __future__ import annotations
-
+import random
+import time
 from typing import Any, Callable
-
 from deolang.gridmap import GridMap
-from deolang.constants import (TURN_LEFT, TURN_RIGHT, DIRECTIONS)
-
+from deolang.constants import TURN_LEFT, TURN_RIGHT, DIRECTIONS
 
 class Interpreter:
     def __init__(self, program_input: str | None = None, build_in_input: Callable = None) -> None:
-        """Initialize interpreter state.
-
-        Args:
-            program_input: Optional external input string to use instead of user input
-            build_in_input: Optional callable to use for input
-        """
         self.program = None
-        self.stack, self.addition_stack, self.output = [], [], []
-        self.x, self.y = 0, 0
-        self.direction = (0, 0)
+        self.stack = []
+        self.addition_stack = []
+        self.output = []
+        self.call_stack = []
+        self.heap = {}
+        self.x = 0
+        self.y = 0
+        self.direction = (1, 0)
         self.ignore_mode = False
+        self.string_mode = False
         self.input = program_input
         self.input_pointer = 0
         self.built_in_input = build_in_input
+        self.ops = {
+            "^": self.op_up,
+            ">": self.op_right,
+            "<": self.op_left,
+            "V": self.op_down,
+            "?": self.op_random_dir,
+            "+": self.op_add,
+            "-": self.op_sub,
+            "*": self.op_mul,
+            ":": self.op_div,
+            "%": self.op_mod,
+            "&": self.op_and,
+            "o": self.op_or,
+            "x": self.op_xor,
+            "~": self.op_not,
+            "=": self.op_eq,
+            "(": self.op_less,
+            ")": self.op_greater,
+            "P": self.op_pop,
+            "S": self.op_swap,
+            "C": self.op_copy,
+            "D": self.op_move_to_aux,
+            "U": self.op_move_from_aux,
+            "{": self.op_rotate_left,
+            "}": self.op_rotate_right,
+            "L": self.op_len,
+            "Z": self.op_clear,
+            "N": self.op_print_num,
+            "A": self.op_print_char,
+            "I": self.op_input,
+            "h": self.op_heap_store,
+            "H": self.op_heap_load,
+            "g": self.op_grid_get,
+            "p": self.op_grid_put,
+            "j": self.op_jump,
+            "F": self.op_func_call,
+            "R": self.op_return,
+            "M": self.op_merge,
+            "T": self.op_time,
+            "W": self.op_wait,
+            "|": self.op_vertical_mirror,
+            "_": self.op_horizontal_mirror,
+            "/": self.op_mirror_slash,
+            "\\": self.op_mirror_backslash,
+            "@": self.op_exit,
+            "\"": self.op_quote
+        }
 
     def load_program(self, file: str) -> None:
-        """Load program from file into GridMap.
+        self.program = GridMap(file=file)
 
-        Args:
-            file: Path to the program file
-        """
-        self.program = GridMap(file)
+    def load_code(self, code: str) -> None:
+        self.program = GridMap(content=code)
 
     def run(self, steps: int = 0) -> bool:
-        """Execute the program for specified steps or until termination.
-
-        Args:
-            steps: Number of execution steps to perform.
-                   If 0 execute until program terminates.
-                   If positive, execute exactly that many steps.
-                   If negative, raises ValueError.
-
-        Returns:
-            False if program terminates during execution,
-            True if all requested steps completed successfully.
-
-        Raises:
-            ValueError: If steps argument is negative
-        """
         if steps < 0:
-            raise ValueError("Program execution steps must be a non-negative integer")
-
+            raise ValueError
         max_iterations = steps if steps > 0 else float('inf')
-
         for _ in range(max_iterations):
             char = self.program.get_item(self.x, self.y)
-            if not char:
-                continue
-
-            result = self.process_char(char)
-            if result is False:
+            if self.process_char(char) is False:
                 return False
-
         return 0 < steps
 
     def get_current_char(self) -> str:
-        """Retrieve the current character from the program grid at the interpreter's position.
-
-        Returns:
-            str: The character at the current (x, y) coordinates if the program is loaded,
-                 otherwise an empty string. Returns an empty string for out-of-bounds positions.
-        """
         if self.program:
             return self.program.get_item(self.x, self.y)
-        else:
-            return ""
+        return ""
 
     def get_output(self) -> str:
-        """Get accumulated output as string.
-
-        Returns:
-            Concatenated output string
-        """
         return "".join(self.output)
 
     def get_program(self) -> GridMap | None:
-        """Get the program grid map.
-
-        Returns:
-            Program grid map if loaded, otherwise None
-        """
         if self.program:
             return self.program.get_map()
-        else:
-            return None
-
-    def get_stack(self) -> str:
-        """Format stack contents for display.
-
-        Returns:
-            Formatted string showing stack elements in LIFO order
-        """
-        return "Stack:\n\n" + "\n".join(f"[{item}]" for item in reversed(self.stack))
-
-    def get_addition_stack(self) -> str:
-        """Format addition stack contents for display.
-
-        Returns:
-            Formatted string showing addition stack elements in LIFO order
-        """
-        addition_stack_dump = "Addition Stack:\n\n"
-        for item in reversed(self.addition_stack):
-            addition_stack_dump += f"[{item}]\n"
-        return addition_stack_dump
-
-    def get_input(self) -> str:
-        if self.input:
-            return self.input
-        else:
-            return ""
+        return None
 
     def get_information(self) -> dict[str, Any]:
-        """Get current interpreter state information.
-
-        Returns:
-            Dictionary containing output, stacks, position, and direction
-        """
         return {
             "output": self.get_output(),
             "stack": self.stack,
             "addition_stack": self.addition_stack,
+            "call_stack": self.call_stack,
+            "heap": self.heap,
             "position": (self.x, self.y),
             "direction": self.direction,
             "character": self.get_current_char(),
             "ignore_mode": self.ignore_mode,
+            "string_mode": self.string_mode,
             "input": self.input,
             "input_pointer": self.input_pointer,
         }
 
     def reset(self) -> None:
-        """Reset interpreter state to initial values."""
-        self.stack, self.addition_stack, self.output, = [], [], []
-        self.ignore_mode, self.input_pointer, self.input = False, 0, ""
-        self.x, self.y = 0, 0
-        self.direction = (0, 0)
+        self.stack = []
+        self.addition_stack = []
+        self.output = []
+        self.call_stack = []
+        self.heap = {}
+        self.ignore_mode = False
+        self.string_mode = False
+        self.input_pointer = 0
+        self.x = 0
+        self.y = 0
+        self.direction = (1, 0)
 
     def set_input(self, input_data: str = "", pointer_position: int = 0) -> None:
-        """Set input for interpreter."""
         self.input = input_data
         self.input_pointer = pointer_position
-        if self.input:
-            self.built_in_input = False
-        else:
-            self.built_in_input = True
+        self.built_in_input = False if self.input else True
 
-    def process_char(self, char: str) -> bool | IndexError:
-        """Process a single character instruction from the DeoLang program.
+    def _pop_string(self) -> str:
+        chars = []
+        while self.stack:
+            val = self.stack.pop()
+            if val == 0:
+                break
+            chars.append(chr(val))
+        return "".join(chars)
 
-        Args:
-            char: Instruction character to execute (PNADUCI+-*%/\_|1234567890)
+    def process_char(self, char: str) -> bool:
+        if self.string_mode:
+            if char == '"':
+                self.string_mode = False
+            else:
+                self.stack.append(ord(char))
+            self.move()
+            return True
 
-        Returns:
-            -
-            - True: Execution should continue normally
-            - False: Program execution should terminate
-            - IndexError: Raised when stack operations encounter insufficient elements
+        if self.ignore_mode:
+            if char in "|_":
+                self.ignore_mode = False
+            self.move()
+            return True
 
-
-
-        ^, >, <, V: Change direction
-
-        0-9: Push to stack
-
-        P: Pop from stack
-
-        N: Append top stack element to output as integer
-
-        A: Append top stack element to output as character
-
-        D: Push top stack element to addition stack
-
-        U: Push top addition stack element to stack
-
-        C: Copy top stack element to top of stack
-
-        I: Push input character to stack
-
-        |, _: Switch ignore mode.
-
-        +, -, *, %: Pop top two stack elements, perform operation bottom over top, push result
-
-        /: Pop top stack element, turn left if 0, right if non-zero
-
-        \: Pop top stack element, turn right if 0, left if non-zero
-
-        Updates interpreter state (position, direction, stacks) accordingly.
-        If in ignore mode, ignore next character in the direction of the interpreter.
-        """
         try:
-            if char == "" or char is None:
-                return False
-            if self.ignore_mode:
-                if char in "|_":
-                    self.ignore_mode = False
-                self.x += self.direction[0]
-                self.y += self.direction[1]
-                return True
-            if char in DIRECTIONS:
-                self.direction = DIRECTIONS[char]
+            if not char:
+                pass
             elif char.isdigit():
                 self.stack.append(int(char))
-            elif char == "+":
-                b = self.stack.pop()
-                a = self.stack.pop()
-                self.stack.append(a + b)
-            elif char == "-":
-                b = self.stack.pop()
-                a = self.stack.pop()
-                self.stack.append(a - b)
-            elif char == "*":
-                b = self.stack.pop()
-                a = self.stack.pop()
-                self.stack.append(a * b)
-            elif char == "%":
-                b = self.stack.pop()
-                a = self.stack.pop()
-                self.stack.append(a // b)
-            elif char == "P":
-                self.stack.pop()
-            elif char == "N":
-                self.output.append(str(self.stack.pop()))
-            elif char == "A":
-                self.output.append(chr(self.stack.pop()))
-            elif char == "D":
-                self.addition_stack.append(self.stack.pop())
-            elif char == "U":
-                self.stack.append(self.addition_stack.pop())
-            elif char == "C":
-                self.stack.append(self.stack[-1])
-            elif char == "I":
-                if self.input == "":
-                    self.stack.append(self.built_in_input())
-                else:
-                    self.stack.append(ord(self.input[self.input_pointer]))
-                    self.input_pointer += 1
-            elif char in "|_":
-                if char == "|" and self.direction in ((-1, 0), (1, 0)):
-                    self.ignore_mode = True
-                elif char == "_" and self.direction in ((0, -1), (0, 1)):
-                    self.ignore_mode = True
-            elif char == "/":
-                val = self.stack.pop()
-                self.direction = TURN_LEFT[self.direction] if val == 0 else TURN_RIGHT[self.direction]
-            elif char == "\\":
-                val = self.stack.pop()
-                self.direction = TURN_RIGHT[self.direction] if val == 0 else TURN_LEFT[self.direction]
-        except IndexError as index_error:
-            return index_error
+            elif char in self.ops:
+                res = self.ops[char]()
+                if res is False:
+                    return False
+                if res == "JUMPED":
+                    return True
+            
+        except Exception:
+            return False
 
+        self.move()
+        return True
+
+    def move(self):
         self.x += self.direction[0]
         self.y += self.direction[1]
 
-        return True
+    def op_up(self): self.direction = DIRECTIONS["^"]
+    def op_right(self): self.direction = DIRECTIONS[">"]
+    def op_left(self): self.direction = DIRECTIONS["<"]
+    def op_down(self): self.direction = DIRECTIONS["V"]
+    def op_random_dir(self): self.direction = random.choice(list(DIRECTIONS.values()))
+
+    def op_add(self):
+        if len(self.stack) < 2: return
+        self.stack.append(self.stack.pop() + self.stack.pop())
+    
+    def op_sub(self):
+        if len(self.stack) < 2: return
+        b, a = self.stack.pop(), self.stack.pop()
+        self.stack.append(a - b)
+
+    def op_mul(self):
+        if len(self.stack) < 2: return
+        self.stack.append(self.stack.pop() * self.stack.pop())
+
+    def op_div(self):
+        if len(self.stack) < 2: return
+        b, a = self.stack.pop(), self.stack.pop()
+        self.stack.append(0 if b == 0 else a // b)
+
+    def op_mod(self):
+        if len(self.stack) < 2: return
+        b, a = self.stack.pop(), self.stack.pop()
+        self.stack.append(0 if b == 0 else a % b)
+
+    def op_and(self):
+        if len(self.stack) < 2: return
+        self.stack.append(self.stack.pop() & self.stack.pop())
+
+    def op_or(self):
+        if len(self.stack) < 2: return
+        self.stack.append(self.stack.pop() | self.stack.pop())
+
+    def op_xor(self):
+        if len(self.stack) < 2: return
+        self.stack.append(self.stack.pop() ^ self.stack.pop())
+
+    def op_not(self):
+        if not self.stack: return
+        self.stack.append(~self.stack.pop())
+
+    def op_eq(self):
+        if len(self.stack) < 2: return
+        self.stack.append(1 if self.stack.pop() == self.stack.pop() else 0)
+
+    def op_less(self):
+        if len(self.stack) < 2: return
+        b, a = self.stack.pop(), self.stack.pop()
+        self.stack.append(1 if a < b else 0)
+
+    def op_greater(self):
+        if len(self.stack) < 2: return
+        b, a = self.stack.pop(), self.stack.pop()
+        self.stack.append(1 if a > b else 0)
+
+    def op_pop(self):
+        if self.stack: self.stack.pop()
+
+    def op_swap(self):
+        if len(self.stack) < 2: return
+        b, a = self.stack.pop(), self.stack.pop()
+        self.stack.extend([b, a])
+
+    def op_copy(self):
+        if self.stack: self.stack.append(self.stack[-1])
+
+    def op_move_to_aux(self):
+        if self.stack: self.addition_stack.append(self.stack.pop())
+
+    def op_move_from_aux(self):
+        if self.addition_stack: self.stack.append(self.addition_stack.pop())
+
+    def op_rotate_left(self):
+        if len(self.stack) > 1: self.stack.insert(0, self.stack.pop())
+
+    def op_rotate_right(self):
+        if len(self.stack) > 1: self.stack.append(self.stack.pop(0))
+
+    def op_len(self):
+        self.stack.append(len(self.stack))
+
+    def op_clear(self):
+        self.stack.clear()
+
+    def op_print_num(self):
+        if self.stack: self.output.append(str(self.stack.pop()))
+
+    def op_print_char(self):
+        if self.stack: self.output.append(chr(self.stack.pop()))
+
+    def op_input(self):
+        if not self.input:
+            if self.built_in_input:
+                val = self.built_in_input()
+                if isinstance(val, str) and val: self.stack.append(ord(val[0]))
+                elif isinstance(val, int): self.stack.append(val)
+        else:
+            if self.input_pointer < len(self.input):
+                self.stack.append(ord(self.input[self.input_pointer]))
+                self.input_pointer += 1
+            else:
+                self.stack.append(-1)
+
+    def op_heap_store(self):
+        if len(self.stack) < 2: return
+        addr, val = self.stack.pop(), self.stack.pop()
+        self.heap[addr] = val
+
+    def op_heap_load(self):
+        if not self.stack: return
+        self.stack.append(self.heap.get(self.stack.pop(), 0))
+
+    def op_grid_get(self):
+        if len(self.stack) < 2: return
+        y, x = self.stack.pop(), self.stack.pop()
+        val = self.program.get_item(x, y)
+        self.stack.append(ord(val) if val else 0)
+
+    def op_grid_put(self):
+        if len(self.stack) < 3: return
+        y, x, val = self.stack.pop(), self.stack.pop(), self.stack.pop()
+        self.program.set_item(x, y, chr(val))
+
+    def op_jump(self):
+        if len(self.stack) < 2: return
+        self.y, self.x = self.stack.pop(), self.stack.pop()
+        return "JUMPED"
+
+    def op_func_call(self):
+        if len(self.stack) < 2: return
+        y, x = self.stack.pop(), self.stack.pop()
+        self.call_stack.append((self.x + self.direction[0], self.y + self.direction[1]))
+        self.x, self.y = x, y
+        return "JUMPED"
+
+    def op_return(self):
+        if self.call_stack:
+            self.x, self.y = self.call_stack.pop()
+            return "JUMPED"
+
+    def op_merge(self):
+        if len(self.stack) < 2: return
+        y, x = self.stack.pop(), self.stack.pop()
+        filename = self._pop_string()
+        self.program.merge_grid(filename, x, y)
+
+    def op_time(self):
+        self.stack.append(int(time.time()))
+
+    def op_wait(self):
+        if self.stack: time.sleep(self.stack.pop())
+
+    def op_vertical_mirror(self):
+        if self.direction in ((-1, 0), (1, 0)): self.ignore_mode = True
+
+    def op_horizontal_mirror(self):
+        if self.direction in ((0, -1), (0, 1)): self.ignore_mode = True
+
+    def op_mirror_slash(self):
+        if not self.stack: return
+        self.direction = TURN_LEFT[self.direction] if self.stack.pop() == 0 else TURN_RIGHT[self.direction]
+
+    def op_mirror_backslash(self):
+        if not self.stack: return
+        val = self.stack.pop()
+        self.direction = TURN_RIGHT[self.direction] if val == 0 else TURN_LEFT[self.direction]
+
+    def op_exit(self): return False
+
+    def op_quote(self): self.string_mode = True
