@@ -17,7 +17,7 @@ from deolang.interpreter import Interpreter
 
 warnings.filterwarnings("ignore")
 
-def resource_path(relative_path): # this is just for an icon xd
+def resource_path(relative_path):
     try:
         base_path = sys._MEIPASS
     except Exception:
@@ -203,13 +203,13 @@ class GridEditor(QTableWidget):
             if lr < self.rowCount() and lc < self.columnCount():
                 item = self.item(lr, lc)
                 if item:
-                    item.setBackground(QColor("#1e1e1e"))  # Default bg
-                    item.setForeground(QColor("#d4d4d4"))  # Default fg
+                    item.setBackground(QColor("#1e1e1e"))
+                    item.setForeground(QColor("#d4d4d4"))
 
         if 0 <= y < self.rowCount() and 0 <= x < self.columnCount():
             item = self.item(y, x)
             if item:
-                item.setBackground(QColor("#228B22"))  # Green
+                item.setBackground(QColor("#228B22"))
                 item.setForeground(QColor("#FFFFFF"))
                 self.last_highlight = (y, x)
                 self.scrollToItem(item)
@@ -374,7 +374,7 @@ class MainWindow(QMainWindow):
         self.grid_editor.set_dimensions(rows, cols)
 
     def open_file(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Open File", "", "Text Files (*.txt);;All Files (*)")
+        path, _ = QFileDialog.getOpenFileName(self, "Open File", "", "Deolang Files (*.deo);;Text Files (*.txt);;All Files (*)")
         if path:
             try:
                 with open(path, 'r') as f:
@@ -386,7 +386,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, "Error", str(e))
 
     def save_file(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Save File", "", "Text Files (*.txt)")
+        path, _ = QFileDialog.getSaveFileName(self, "Save File", "", "Deolang Files (*.deo);;Text Files (*.txt)")
         if path:
             with open(path, 'w') as f:
                 f.write(self.grid_editor.get_content_as_string())
@@ -423,7 +423,7 @@ class MainWindow(QMainWindow):
         self.txt_output.clear()
 
         if self.grid_editor.last_highlight:
-            self.grid_editor.highlight_cell(-1, -1)  # Clear
+            self.grid_editor.highlight_cell(-1, -1)
 
         self.update_debug_view()
 
