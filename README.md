@@ -15,20 +15,56 @@ The language is stack-based and includes a variety of commands for:
 *   I/O operations
 *   Flow control through mirrors, jumps, and function calls
 
+---
+
 ## IDE & Debugger
 
-This project comes with a built-in IDE and debugger.
+This project includes a powerful IDE and debugger to help you write and test your `.deo` programs.
 
 ### Features
-*   Code editor with syntax highlighting.
-*   Live visualization of the main stack, auxiliary stack, and heap memory.
-*   Controls to run, step through, stop, and reset the program.
-*   Adjustable execution speed.
-*   An output window to see the program's results.
-*   A handy in-app cheatsheet for all commands.
+*   **Grid Editor:** Specialized editor for 2D code placement.
+*   **Live Debugging:** Real-time visualization of the main stack, auxiliary stack, and heap memory.
+*   **Execution Controls:** Run, step, stop, and reset functionality.
+*   **Variable Speed:** Adjustable execution frequency (Hz).
+*   **Integrated Cheatsheet:** Quick access to all language commands.
 
 ### How to Run
-To launch the IDE, run the `debugger.py` file or use `debugger.exe`:
+Launch the IDE by running:
 ```bash
 python debugger.py
+```
+
+---
+
+## Compiler (`deolangc.py`)
+
+Deolang features a dedicated compiler that allows you to turn your `.deo` source files into standalone, executable programs.
+
+### Features
+*   **Standalone Binaries:** Bundles the interpreter and your code into a single `.exe` (Windows) or binary (Linux/macOS).
+*   **Real-time I/O:** Compiled programs support immediate console output and standard input.
+*   **Optimized Runtime:** Patched to handle infinite execution loops efficiently.
+
+### Prerequisites
+To compile to an executable, you must have `PyInstaller` installed:
+```bash
+pip install pyinstaller
+```
+
+### Usage
+To compile a Deolang file to a native executable:
+```bash
+python deolangc.py your_program.deo
+```
+
+To just generate a bundled Python script without building an `.exe`:
+```bash
+python deolangc.py your_program.deo --py
+```
+
+---
+
+## File Extensions
+*   `.deo`: Standard Deolang source file.
+*   `.txt`: Alternative text format supported by the IDE.
 ```
